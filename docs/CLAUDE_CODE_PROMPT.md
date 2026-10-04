@@ -122,6 +122,14 @@ first job. If the stat hook is hard, ship the loop without grades first.
 - **Targeted decomp:** reverse-engineer only the systems blocking these
   features (model loading, animation selection, crowd logic, SportsCenter
   selection, penalties), rewrite in C, and inject into owned code space.
+- **APF 2K8-style timed kicking (last on the list):** replace the 2K5
+  fill-and-stop kick meter with a kick you have to time, like APF 2K8:
+  timing sets accuracy (hook/slice), swing sets power, and the window scales
+  with KAC/KPW and pressure. Optional right-stick swing mode. Applies to FG,
+  PAT, punt and kickoff. Default off; CPU unchanged. Upstream already maps
+  meter→distance (`nfl2k5_kick_rules.py`), the kick HUD, and the kick-meter
+  controller context; the meter's per-frame update/latch code and APF's
+  actual mechanic still need research. See spec §15.
 
 ## How to report each session
 

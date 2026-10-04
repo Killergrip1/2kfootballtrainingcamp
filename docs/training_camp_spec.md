@@ -382,3 +382,68 @@ In-game witnesses (xemu), each recorded in the report:
 > Practice lifecycle, and the per-play stat accumulation path in the 2K5 XBE
 > using the repo's Ghidra scripts. Report addresses, evidence, and confidence
 > using PROVED / HYPOTHESIS labels. Do not write any patch yet.
+
+## 15. Phase 10 — APF 2K8-style timed kicking (added last)
+
+Replace 2K5's fill-and-stop kick meter with a kick you have to **time**, in
+the style of All-Pro Football 2K8. Applies to field goals, PATs, punts and
+kickoffs. Experimental and default off, like every other feature here. (§12
+puts "APF 2K8" out of scope. That means porting the APF game itself. This
+section only re-creates one APF mechanic natively in 2K5.)
+
+**Target feel (HYPOTHESIS: confirm against APF 2K8 in Xenia before building):**
+- A timing window, not a "stop the bar at max" meter. Power comes from the
+  swing and accuracy from timing. A perfect press in the sweet spot gives a
+  straight kick at the kicker's rated distance. Early or late presses hook or
+  slice, and the error grows with distance from the sweet spot.
+- Optional analog mode (APF-style swing): pull the right stick back to start
+  the run-up, then flick it forward. Power comes from the flick and accuracy
+  from how straight it is.
+- Kicker ratings set the size of the window: KAC (accuracy) widens the sweet
+  spot, KPW (power) raises max distance. Pressure moments (late game, long
+  attempts, icing) can shrink the window. Options: off, on, user-only.
+- The CPU keeps its current range logic, so CPU kickers are unaffected.
+
+**What upstream already has (Beta 76.4; from repo research, labels are the repo's):**
+
+| Block | Status | Where |
+|---|---|---|
+| Meter fill → distance: human launch `FUN_003147a0` reads curve `0x50B4F0` (fill→yards) × kicker curve `0x50B514` at `KPW - 0.2*(1-KAC)`, minus rand×4 yd | PROVED offline (unicorn), not witnessed | `mod_editor/core/nfl2k5_kick_rules.py` |
+| Kickoff curve `0x50B980`, punt curve `0x50C0F8`; CPU range `FUN_0018b120` reads the same tables | PROVED offline | same |
+| Kick HUD init `FUN_000ba940` (KickArrow / KickMeter / windmeter scenes), draw `FUN_000bb2c0`, curve sampler `0x2F010` | PROVED offline | `nfl2k5_kick_meter_2026.py`, `nfl2k5_hud_layout.py`, `reports/b76_km/` |
+| Place-kick flow: `2F15C0` waits → meter prep `2EE950` → run-up `2F0DD0` (fed by latched meter completion) | PROVED offline, but the meter is supplied externally in tests | `ASTRA_KICKOFF_V4_REPORT.md` |
+| Ball launch `0x222CA0`, release call `0x222D01`, aim hook `0x222E67` | used by dynamic kickoff (experimental, unwitnessed) | `nfl2k5_dynamic_kickoff.py` |
+| Controller: command context 2 = kick meter (commands 0x37..0x3B, 0x3D/0x3E); held-command reader `0x120960`; XInput decoder `0x39480` (analog at +0x24) | bytes PROVED, command meanings HYPOTHESIS | `FABLE_MYCAREER_REPORT.md`, `nfl2k5_read_option_runtime.py` |
+| APF 2K8 kick mechanic research | **none in repo** | — |
+
+**Phase 0 items (TO VERIFY):**
+1. The address and state of the meter's value, and the per-frame code that
+   sweeps it and latches it on button press (the consumer of the context-2
+   commands). This is the main unknown.
+2. Where the aim/accuracy result is applied at launch (`FUN_003147a0`,
+   `0x222E67`). Today accuracy appears to be only the KAC term in distance,
+   with no lateral error model documented.
+3. Record the APF 2K8 kick behaviour in Xenia (video plus notes): button
+   sequence, window size and how ratings and pressure change it. No XEX reverse
+   engineering is needed for a feel-alike.
+4. Whether the existing KickMeter scene (13 submeshes and MAX window) can be
+   driven to show a timing marker, or whether a new HUD runtime is needed
+   (the scorebug runtime is an allocator-based pattern).
+
+**Mechanism (HYPOTHESIS):**
+- Hook the meter latch: when the button is pressed, record the frame offset
+  from the sweet spot instead of (or alongside) the fill value.
+- Map timing error to (a) a distance multiplier through the existing curve
+  `0x50B4F0` and (b) a lateral launch-angle offset applied at the aim hook,
+  scaled by KAC.
+- State: under 16 bytes (mode flag, sweet-spot frame, latched error, pressure
+  scale), in a named allocator block.
+
+**Witnesses:**
+- A perfect-timing FG from 30 yd goes straight; early and late presses miss
+  left and right consistently.
+- Max distance still tracks KPW across kickers; a low-KAC kicker has a visibly
+  narrower window.
+- Punts and kickoffs use the same timing; the dynamic kickoff still works
+  when both are on.
+- With the flag off, kicking is byte-identical to retail.
